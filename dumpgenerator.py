@@ -19,6 +19,7 @@
 # To learn more, read the documentation:
 #     https://github.com/WikiTeam/wikiteam/wiki
 
+# noinspection PyPep8Naming
 try:
     from kitchen.text.converters import getwriter, to_unicode
 except ImportError:
@@ -33,13 +34,9 @@ except ImportError:
     print("Please install the argparse module.")
     sys.exit(1)
 import json
-try:
-    from hashlib import md5
-except ImportError:             # Python 2.4 compatibility
-    from md5 import new as md5
+from hashlib import md5
 import os
 import re
-import subprocess
 try:
     import requests
 except ImportError:
@@ -60,23 +57,26 @@ try:
     from urllib.parse import urlparse, urlunparse
 except ImportError:
     from urllib.parse import urlparse, urlunparse
-UTF8Writer = getwriter('utf8')
-sys.stdout = UTF8Writer(sys.stdout)
 
-__VERSION__ = '0.4.0-alpha'  # major, minor, micro: semver.org
+__VERSION__ = '0.5.0'  # major, minor, micro: semver.org
+
 
 class PageMissingError(Exception):
     def __init__(self, title, xml):
         self.title = title
         self.xml = xml
+
     def __str__(self):
         return "page '%s' not found" % self.title
+
 
 class ExportAbortedError(Exception):
     def __init__(self, index):
         self.index = index
+
     def __str__(self):
         return "Export from '%s' did not return anything." % self.index
+
 
 def getVersion():
     return(__VERSION__)
@@ -126,11 +126,11 @@ def cleanHTML(raw=''):
 
 def handleStatusCode(response):
     statuscode = response.status_code
-    if statuscode >= 200 and statuscode < 300:
+    if 200 <= statuscode < 300:
         return
 
     print("HTTP Error %d." % statuscode)
-    if statuscode >= 300 and statuscode < 400:
+    if 300 <= statuscode < 400:
         print("Redirect should happen automatically: please report this as a bug.")
         print(response.url)
 
@@ -150,7 +150,7 @@ def handleStatusCode(response):
         print(response.url)
         sys.exit(1)
 
-    elif statuscode == 429 or (statuscode >= 500 and statuscode < 600):
+    elif statuscode == 429 or (500 <= statuscode < 600):
         print("Server error, max retries exceeded.")
         print("Please resume the dump later.")
         print(response.url)
@@ -272,6 +272,7 @@ def getPageTitlesAPI(config={}, session=None):
             delay(config=config, session=session)
         print('    %d titles retrieved in the namespace %d' % (c, namespace))
 
+
 def getPageTitlesScraper(config={}, session=None):
     """ Scrape the list of page titles from Special:Allpages """
     titles = []
@@ -390,6 +391,7 @@ def getPageTitles(config={}, session=None):
 
     print('%d page titles loaded' % (c))
     return titlesfilename
+
 
 def getImageNames(config={}, session=None):
     """ Get list of image names """
@@ -565,7 +567,6 @@ def getXMLPageCore(headers={}, params={}, config={}, session=None):
                     text='Error while retrieving the last revision of "%s". Skipping.' %
                     (params['pages']))
                 raise ExportAbortedError(config['index'])
-                return ''  # empty xml
         # FIXME HANDLE HTTP Errors HERE
         try:
             r = session.post(url=config['index'], params=params, headers=headers, timeout=10)
@@ -779,6 +780,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
     xmlfile.close()
     print('XML dump saved at...', xmlfilename)
 
+
 def getXMLRevisions(config={}, session=None, allpages=False, start=None):
     # FIXME: actually figure out the various strategies for each MediaWiki version
     apiurl = urlparse(config['api'])
@@ -971,7 +973,7 @@ def getXMLRevisions(config={}, session=None, allpages=False, start=None):
                     if e.response.status_code == 405 and config['http_method'] == "POST":
                         print("POST request to the API failed, retrying with GET")
                         config['http_method'] = "GET"
-                        exportrequest = site.api(http_method=config['http_method'], **exportparams)
+                        site.api(http_method=config['http_method'], **exportparams)
                 except mwclient.errors.InvalidResponse:
                     logerror(
                                 config=config,
@@ -1026,18 +1028,19 @@ def getXMLRevisions(config={}, session=None, allpages=False, start=None):
                 # We're done iterating for this title or titles.
                 c += len(titlelist)
                 # Reset for the next batch.
-                titlelist = []
+                titlelist.clear()
                 if c % 10 == 0:
                     print(('Downloaded {} pages'.format(c)))
-
 
     except mwclient.errors.MwClientError as e:
         print(e)
         print("This mwclient version seems not to work for us. Exiting.")
         sys.exit()
 
+
 def makeXmlFromPage(page):
-    """ Output an XML document as a string from a page as in the API JSON """
+    """ Output an XML documen                        exportrequest = site.api(http_method=config['http_method'], **exportparams)
+t as a string from a page as in the API JSON """
     try:
         p = E.page(
                 E.title(to_unicode(page['title'])),
@@ -1083,6 +1086,7 @@ def makeXmlFromPage(page):
         raise PageMissingError(page['title'], e)
     return etree.tostring(p, pretty_print=True, encoding='unicode')
 
+
 def readTitles(config={}, start=None, batch=False):
     """ Read title list from a file, from the title "start" """
 
@@ -1114,6 +1118,7 @@ def readTitles(config={}, start=None, batch=False):
                 else:
                     yield titlelist
                     titlelist = []
+
 
 def reverse_readline(filename, buf_size=8192, truncate=False):
     """a generator that returns the lines of a file in reverse order"""
@@ -1157,6 +1162,7 @@ def reverse_readline(filename, buf_size=8192, truncate=False):
                 else:
                     yield lines[index]
         yield segment
+
 
 def saveImageNames(config={}, images=[], session=None):
     """ Save image list in a file, including filename, url and uploader """
@@ -1932,6 +1938,7 @@ def checkRetryAPI(api=None, retries=5, apiclient=False, session=None):
 
     return check, api
 
+
 def checkAPI(api=None, session=None):
     """ Checking API availability """
     global cj
@@ -2269,6 +2276,7 @@ def saveIndexPHP(config={}, session=None):
         with open('%s/index.html' % (config['path']), 'w') as outfile:
             outfile.write(raw.encode('utf-8'))
 
+
 def saveSiteInfo(config={}, session=None):
     """ Save a file with site info """
 
@@ -2523,6 +2531,7 @@ def main(params=[]):
     saveSpecialVersion(config=config, session=other['session'])
     saveSiteInfo(config=config, session=other['session'])
     bye()
+
 
 if __name__ == "__main__":
     main()
