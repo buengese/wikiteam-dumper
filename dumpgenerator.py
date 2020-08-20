@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # dumpgenerator.py A generator of dumps for wikis
@@ -380,7 +380,7 @@ def getPageTitles(config={}, session=None):
     titlesfile = open('%s/%s' % (config['path'], titlesfilename), 'wt')
     c = 0
     for title in titles:
-        titlesfile.write(title.encode('utf-8') + "\n")
+        titlesfile.write(title + "\n")
         c += 1
     # TODO: Sort to remove dupes? In CZ, Widget:AddThis appears two times:
     # main namespace and widget namespace.
@@ -722,7 +722,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
         else:
             print('Retrieving the XML for every page from the beginning')
             xmlfile = open('%s/%s' % (config['path'], xmlfilename), 'w')
-            xmlfile.write(header.encode('utf-8'))
+            xmlfile.write(header)
         try:
             r_timestamp = r'<timestamp>([^<]+)</timestamp>'
             for xml in getXMLRevisions(config=config, session=session, start=start):
@@ -731,7 +731,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
                 # TODO: get the page title and reuse the usual format "X title, y edits"
                 print("        %d more revisions exported" % numrevs)
                 xml = cleanXML(xml=xml)
-                xmlfile.write(xml.encode('utf-8'))
+                xmlfile.write(xml)
         except AttributeError as e:
             print(e)
             print("This API library version is not working")
@@ -746,7 +746,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
             # requested complete xml dump
             lock = False
             xmlfile = open('%s/%s' % (config['path'], xmlfilename), 'w')
-            xmlfile.write(header.encode('utf-8'))
+            xmlfile.write(header)
             xmlfile.close()
 
         xmlfile = open('%s/%s' % (config['path'], xmlfilename), 'a')
@@ -764,7 +764,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
             try:
                 for xml in getXMLPage(config=config, title=title, session=session):
                     xml = cleanXML(xml=xml)
-                    xmlfile.write(xml.encode('utf-8'))
+                    xmlfile.write(xml)
             except PageMissingError:
                 logerror(
                     config=config,
@@ -1101,7 +1101,7 @@ def readTitles(config={}, start=None, batch=False):
 
     with titlesfile as f:
         for line in f:
-            title = line.decode("utf-8").strip()
+            title = line.strip()
             if title == '--END--':
                 break
             elif seeking and title != start:
@@ -1569,7 +1569,7 @@ def loadConfig(config={}, configfilename=''):
 def saveConfig(config={}, configfilename=''):
     """ Save config file """
 
-    with open('%s/%s' % (config['path'], configfilename), 'w') as outfile:
+    with open('%s/%s' % (config['path'], configfilename), 'wb') as outfile:
         pickle.dump(config, outfile)
 
 
@@ -2478,7 +2478,7 @@ def mwGetAPIAndIndex(url=''):
 
 def main(params=[]):
     """ Main function """
-    configfilename = 'config.txt'
+    configfilename = 'config'
     config, other = getParameters(params=params)
     avoidWikimediaProjects(config=config, other=other)
 
