@@ -513,9 +513,8 @@ def logerror(config={}, text=''):
     """ Log error in file """
     if text:
         with open('%s/errors.log' % (config['path']), 'a') as outfile:
-            output = '%s: %s\n' % (
-                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), text)
-            outfile.write(output.encode('utf-8'))
+            output = '%s: %s\n' % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), text)
+            outfile.write(output)
 
 
 def getXMLPageCore(headers={}, params={}, config={}, session=None):
@@ -1176,18 +1175,7 @@ def saveImageNames(config={}, images=[], session=None):
     imagesfilename = '%s-%s-images.txt' % (
         domain2prefix(config=config), config['date'])
     imagesfile = open('%s/%s' % (config['path'], imagesfilename), 'w')
-    imagesfile.write(
-        ('\n'.join(
-            [
-                '%s\t%s\t%s' %
-                (filename,
-                 url,
-                 uploader) for filename,
-                               url,
-                               uploader in images]
-        ).encode('utf-8')
-         )
-    )
+    imagesfile.write(('\n'.join(['%s\t%s\t%s' %(filename, url, uploader) for filename, url, uploader in images])))
     imagesfile.write('\n--END--')
     imagesfile.close()
 
@@ -1373,11 +1361,9 @@ def getImageNamesAPI(config={}, session=None):
                 # http://bugs.python.org/issue8136
                 if 'api' in config and ('.wikia.' in config['api'] or '.fandom.com' in config['api']):
                     # to avoid latest?cb=20120816112532 in filenames
-                    filename = str(
-                        urllib.parse.unquote((re.sub('_', ' ', url.split('/')[-3])).encode('ascii', 'ignore')), 'utf-8')
+                    filename = str(urllib.parse.unquote((re.sub('_', ' ', url.split('/')[-3])), 'utf-8'))
                 else:
-                    filename = str(
-                        urllib.parse.unquote((re.sub('_', ' ', url.split('/')[-1])).encode('ascii', 'ignore')), 'utf-8')
+                    filename = str(urllib.parse.unquote((re.sub('_', ' ', url.split('/')[-1])), 'utf-8'))
                 uploader = re.sub('_', ' ', image['user'])
                 images.append([filename, url, uploader])
         else:
@@ -1503,7 +1489,7 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
             xmlfiledesc = ''
             logerror(
                 config=config,
-                text='The page "%s" was missing in the wiki (probably deleted)' % (title.decode('utf-8'))
+                text='The page "%s" was missing in the wiki (probably deleted)' % title
             )
 
         f = open('%s/%s.desc' % (imagepath, filename2), 'w')
@@ -1511,7 +1497,7 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
         if not re.search(r'</mediawiki>', xmlfiledesc):
             # failure when retrieving desc? then save it as empty .desc
             xmlfiledesc = ''
-        f.write(xmlfiledesc.encode('utf-8'))
+        f.write(xmlfiledesc)
         f.close()
         delay(config=config, session=session)
         c += 1
@@ -2264,7 +2250,7 @@ def saveSpecialVersion(config={}, session=None):
         delay(config=config, session=session)
         raw = removeIP(raw=raw)
         with open('%s/Special:Version.html' % (config['path']), 'w') as outfile:
-            outfile.write(raw.encode('utf-8'))
+            outfile.write(raw)
 
 
 def saveIndexPHP(config={}, session=None):
@@ -2279,7 +2265,7 @@ def saveIndexPHP(config={}, session=None):
         delay(config=config, session=session)
         raw = removeIP(raw=raw)
         with open('%s/index.html' % (config['path']), 'w') as outfile:
-            outfile.write(raw.encode('utf-8'))
+            outfile.write(raw)
 
 
 def saveSiteInfo(config={}, session=None):
