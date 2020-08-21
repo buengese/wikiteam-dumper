@@ -85,10 +85,16 @@ def getVersion():
     return (__VERSION__)
 
 
-def truncateFilename(other={}, filename=''):
-    """ Truncate filenames when downloading images with large filenames """
-    return filename[:other['filenamelimit']] + \
-        md5(filename.encode('utf-8')).hexdigest() + '.' + filename.split('.')[-1]
+def sanitizeFilename(other={}, filename=''):
+    """ Strip forward slashes and truncate overlong filenames. """
+    """ Also insert a hash when the filename was modified to try to """
+    """ avoid name collisions. """
+    if '/' in filename or len(filename) > other['filenamelimit']:
+        filename = filename.replace('/', '%2F')
+        hash = md5(filename.encode('utf-8')).hexdigest()
+        extension = '.' + filename.split('.')[-1]
+        filename = filename[:other['filenamelimit']] + hash + extension
+    return filename
 
 
 def delay(config={}, session=None):
@@ -1447,7 +1453,7 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
     print('Retrieving images from "%s"' % (start and start or 'start'))
     imagepath = '%s/images' % (config['path'])
     if not os.path.isdir(imagepath):
-        print('Creating "%s" directory' % (imagepath))
+        print('Creating "%s" directory' % imagepath)
         os.makedirs(imagepath)
 
     c = 0
@@ -1461,22 +1467,14 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
             continue
         delay(config=config, session=session)
 
-        # saving file
-        # truncate filename if length > 100 (100 + 32 (md5) = 132 < 143 (crash
-        # limit). Later .desc is added to filename, so better 100 as max)
-        filename2 = urllib.parse.unquote(filename)
-        if len(filename2) > other['filenamelimit']:
-            # split last . (extension) and then merge
-            filename2 = truncateFilename(other=other, filename=filename2)
-            print('Filename is too long, truncating. Now it is:', filename2)
-        filename3 = '%s/%s' % (imagepath, filename2)
-        imagefile = open(filename3, 'wb')
+        filename = sanitizeFilename(other=other, filename=urllib.parse.unquote(filename))
+        imagefile = open('%s/%s' % (imagepath, filename), 'wb')
         r = requests.get(url=url)
         imagefile.write(r.content)
         imagefile.close()
         # saving description if any
         try:
-            title = 'Image:%s' % (filename)
+            title = 'Image:%s' % filename
             if config['xmlrevisions'] and config['api'] and config['api'].endswith("api.php"):
                 r = session.get(config['api'] + "?action=query&export&exportnowrap&titles=%s" % title)
                 xmlfiledesc = r.text
@@ -1492,7 +1490,7 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
                 text='The page "%s" was missing in the wiki (probably deleted)' % title
             )
 
-        f = open('%s/%s.desc' % (imagepath, filename2), 'w')
+        f = open('%s/%s.desc' % (imagepath, filename), 'w')
         # <text xml:space="preserve" bytes="36">Banner featuring SG1, SGA, SGU teams</text>
         if not re.search(r'</mediawiki>', xmlfiledesc):
             # failure when retrieving desc? then save it as empty .desc
@@ -1502,9 +1500,9 @@ def generateImageDump(config={}, other={}, images=[], start='', session=None):
         delay(config=config, session=session)
         c += 1
         if c % 10 == 0:
-            print('    Downloaded %d images' % (c))
+            print('    Downloaded %d images' % c)
 
-    print('Downloaded %d images' % (c))
+    print('Downloaded %d images' % c)
 
 
 def saveLogs(config={}, session=None):
