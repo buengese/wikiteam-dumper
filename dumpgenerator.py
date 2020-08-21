@@ -24,9 +24,9 @@ try:
     from kitchen.text.converters import getwriter, to_unicode
 except ImportError:
     print("Please install the kitchen module.")
+import datetime
 import http.cookiejar
 import pickle
-import datetime
 import sys
 
 try:
@@ -82,7 +82,7 @@ class ExportAbortedError(Exception):
 
 
 def getVersion():
-    return (__VERSION__)
+    return __VERSION__
 
 
 def sanitizeFilename(other={}, filename=''):
@@ -261,11 +261,11 @@ def getPageTitlesAPI(config={}, session=None):
         config=config, session=session)
     for namespace in namespaces:
         if namespace in config['exnamespaces']:
-            print('    Skipping namespace = %d' % (namespace))
+            print('    Skipping namespace = %d' % namespace)
             continue
 
         c = 0
-        print('    Retrieving titles in the namespace %d' % (namespace))
+        print('    Retrieving titles in the namespace %d' % namespace)
         apiurl = urlparse(config['api'])
         site = mwclient.Site(apiurl.netloc, apiurl.path.replace("api.php", ""), scheme=apiurl.scheme)
         for page in site.allpages(namespace=namespace):
@@ -400,7 +400,7 @@ def getPageTitles(config={}, session=None):
     titlesfile.close()
     print('Titles saved at...', titlesfilename)
 
-    print('%d page titles loaded' % (c))
+    print('%d page titles loaded' % c)
     return titlesfilename
 
 
@@ -437,14 +437,16 @@ def getXMLHeader(config={}, session=None):
             xml = r.text
             # Otherwise try without exportnowrap, e.g. Wikia returns a blank page on 1.19
             if not re.match(r"\s*<mediawiki", xml):
-                r = requests.get(config['api'] + '?action=query&export=1&list=allpages&aplimit=1&format=json', timeout=10)
+                r = requests.get(config['api'] + '?action=query&export=1&list=allpages&aplimit=1&format=json',
+                                 timeout=10)
                 try:
                     xml = r.json()['query']['export']['*']
                 except KeyError:
                     pass
             if not re.match(r"\s*<mediawiki", xml):
                 # Do without a generator, use our usual trick of a random page title
-                r = requests.get(config['api'] + '?action=query&export=1&exportnowrap=1&titles=' + randomtitle, timeout=10)
+                r = requests.get(config['api'] + '?action=query&export=1&exportnowrap=1&titles=' + randomtitle,
+                                 timeout=10)
                 xml = r.text
             # Again try without exportnowrap
             if not re.match(r"\s*<mediawiki", xml):
@@ -479,7 +481,8 @@ def getXMLHeader(config={}, session=None):
                         timeout=120
                     )
                     config['export'] = json.loads(r.text)['query']['namespaces']['-1']['*'] + ':Export'
-                    xml = "".join([x for x in getXMLPage(config=config, title=randomtitle, verbose=False, session=session)])
+                    xml = "".join(
+                        [x for x in getXMLPage(config=config, title=randomtitle, verbose=False, session=session)])
             except PageMissingError as pme:
                 xml = pme.xml
             except ExportAbortedError:
@@ -494,7 +497,7 @@ def getXMLHeader(config={}, session=None):
             header, config = getXMLHeader(config=config, session=session)
         else:
             print('XML export on this wiki is broken, quitting.')
-            logerror('XML export on this wiki is broken, quitting.')
+            logerror(config=config, text='XML export on this wiki is broken, quitting.')
             sys.exit()
     return header, config
 
@@ -546,7 +549,7 @@ def getXMLPageCore(headers={}, params={}, config={}, session=None):
             if params['limit'] > 1:
                 params['limit'] = params['limit'] / 2  # half
         if c >= maxretries:
-            print('    We have retried %d times' % (c))
+            print('    We have retried %d times' % c)
             print('    MediaWiki error for "%s", network error or whatever...' % (params['pages']))
             if config['failfast']:
                 print("Exit, it will be for another time")
@@ -688,7 +691,7 @@ def getXMLPage(config={}, title='', verbose=True, session=None):
     yield "</page>\n"
 
     if verbose:
-        if (numberofedits == 1):
+        if numberofedits == 1:
             print('    %s, 1 edit' % (title.strip()))
         else:
             print('    %s, %d edits' % (title.strip(), numberofedits))
@@ -772,7 +775,7 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
                 continue
             delay(config=config, session=session)
             if c % 10 == 0:
-                print('Downloaded %d pages' % (c))
+                print('Downloaded %d pages' % c)
             try:
                 for xml in getXMLPage(config=config, title=title, session=session):
                     xml = cleanXML(xml=xml)
@@ -1145,7 +1148,7 @@ def reverse_block_generator(file_obj, size=64 * 1024, reset_offset=True):
 
 def cleanup_dump(file_obj):
     file_size = file_obj.seek(0, os.SEEK_END)
-    bs = 64*1024
+    bs = 64 * 1024
     count = 0
     delim = "</page>\n".encode("utf-8")
     block_generator_kws = dict(size=bs, reset_offset=True)
@@ -1181,7 +1184,7 @@ def saveImageNames(config={}, images=[], session=None):
     imagesfilename = '%s-%s-images.txt' % (
         domain2prefix(config=config), config['date'])
     imagesfile = open('%s/%s' % (config['path'], imagesfilename), 'w')
-    imagesfile.write(('\n'.join(['%s\t%s\t%s' %(filename, url, uploader) for filename, url, uploader in images])))
+    imagesfile.write(('\n'.join(['%s\t%s\t%s' % (filename, url, uploader) for filename, url, uploader in images])))
     imagesfile.write('\n--END--')
     imagesfile.close()
 
@@ -1245,7 +1248,7 @@ def getImageNamesScraper(config={}, session=None):
                 r'(?i)(allowed memory size of \d+ bytes exhausted|Call to a member function getURL)',
                 raw):
             if limit > 10:
-                print('Error: listing %d images in a chunk is not possible, trying tiny chunks' % (limit))
+                print('Error: listing %d images in a chunk is not possible, trying tiny chunks' % limit)
                 limit = limit / 10
                 continue
             elif retries > 0:  # waste retries, then exit
@@ -1314,7 +1317,7 @@ def getImageNamesScraper(config={}, session=None):
         else:
             offset = ''
 
-    if (len(images) == 1):
+    if len(images) == 1:
         print('    Found 1 image')
     else:
         print('    Found %d images' % (len(images)))
@@ -1424,7 +1427,7 @@ def getImageNamesAPI(config={}, session=None):
                 # if the API doesn't return query data, then we're done
                 break
 
-    if (len(images) == 1):
+    if len(images) == 1:
         print('    Found 1 image')
     else:
         print('    Found %d images' % (len(images)))
@@ -1613,7 +1616,7 @@ def bye():
     print("Good luck! Bye!")
 
 
-def getParameters(params=[]):
+def getParameters(params=None):
     if not params:
         params = sys.argv
 
@@ -1703,7 +1706,7 @@ def getParameters(params=[]):
 
     # Don't mix download params and meta info params
     if (args.xml or args.images) and \
-            (args.get_wiki_engine):
+            args.get_wiki_engine:
         print('ERROR: Don\'t mix download params and meta info params')
         parser.print_help()
         sys.exit(1)
@@ -1967,10 +1970,10 @@ def checkAPI(api=None, session=None):
             try:
                 index = result['query']['general']['server'] + \
                         result['query']['general']['script']
-                return (True, index, api)
+                return True, index, api
             except KeyError:
                 print("MediaWiki API seems to work but returned no index URL")
-                return (True, None, api)
+                return True, None, api
     except ValueError:
         print(repr(r.text))
         print("MediaWiki API returned data we could not parse")
@@ -2036,52 +2039,6 @@ def fixBOM(request):
     return request.text
 
 
-def checkXMLIntegrity(config={}, titles=[], session=None):
-    """ Check XML dump integrity, to detect broken XML chunks """
-    return
-
-    print('Verifying dump...')
-    checktitles = 0
-    checkpageopen = 0
-    checkpageclose = 0
-    checkrevisionopen = 0
-    checkrevisionclose = 0
-    for line in file(
-            '%s/%s-%s-%s.xml' %
-            (config['path'],
-             domain2prefix(
-                 config=config,
-                 session=session),
-             config['date'],
-             config['curonly'] and 'current' or 'history'),
-            'r').read().splitlines():
-        if "<revision>" in line:
-            checkrevisionopen += 1
-        elif "</revision>" in line:
-            checkrevisionclose += 1
-        elif "<page>" in line:
-            checkpageopen += 1
-        elif "</page>" in line:
-            checkpageclose += 1
-        elif "<title>" in line:
-            checktitles += 1
-        else:
-            continue
-    if (checktitles == checkpageopen and checktitles == checkpageclose and checkrevisionopen == checkrevisionclose):
-        pass
-    else:
-        print('XML dump seems to be corrupted.')
-        reply = ''
-        if config['failfast']:
-            reply = 'yes'
-        while reply.lower() not in ['yes', 'y', 'no', 'n']:
-            reply = input('Regenerate a new dump ([yes, y], [no, n])? ')
-        if reply.lower() in ['yes', 'y']:
-            generateXMLDump(config=config, titles=titles, session=session)
-        elif reply.lower() in ['no', 'n']:
-            print('Not generating a new dump.')
-
-
 def createNewDump(config={}, other={}):
     images = []
     print('Trying generating a new dump into a new directory...')
@@ -2089,10 +2046,6 @@ def createNewDump(config={}, other={}):
         getPageTitles(config=config, session=other['session'])
         titles = readTitles(config)
         generateXMLDump(config=config, titles=titles, session=other['session'])
-        checkXMLIntegrity(
-            config=config,
-            titles=titles,
-            session=other['session'])
     if config['images']:
         images += getImageNames(config=config, session=other['session'])
         saveImageNames(config=config, images=images, session=other['session'])
@@ -2110,7 +2063,8 @@ def resumePreviousDump(config={}, other={}):
     print('Resuming previous dump process...')
     if config['xml']:
         try:
-            fh = open('%s/%s-%s-titles.txt' % (config['path'], domain2prefix(config=config, session=other['session']), config['date']), "rb")
+            fh = open('%s/%s-%s-titles.txt' % (
+            config['path'], domain2prefix(config=config, session=other['session']), config['date']), "rb")
         except:
             raise
         try:
@@ -2212,7 +2166,7 @@ def resumePreviousDump(config={}, other={}):
                 config=config,
                 other=other,
                 images=images,
-                start=images[c-1][0],
+                start=images[c - 1][0],
                 session=other['session'])
 
 
@@ -2428,15 +2382,11 @@ def mwGetAPIAndIndex(url=''):
         pass  # build API using index and check it
 
     # Index.php
-    m = re.findall(
-        r'<li id="ca-viewsource"[^>]*?>\s*(?:<span>)?\s*<a href="([^\?]+?)\?',
-        result)
+    m = re.findall(r'<li id="ca-viewsource"[^>]*?>\s*(?:<span>)?\s*<a href="([^\?]+?)\?', result)
     if m:
         index = m[0]
     else:
-        m = re.findall(
-            r'<li id="ca-history"[^>]*?>\s*(?:<span>)?\s*<a href="([^\?]+?)\?',
-            result)
+        m = re.findall(r'<li id="ca-history"[^>]*?>\s*(?:<span>)?\s*<a href="([^\?]+?)\?', result)
         if m:
             index = m[0]
     if index:
@@ -2444,13 +2394,7 @@ def mwGetAPIAndIndex(url=''):
             index = '/'.join(api.split('/')[:-1]) + '/' + index.split('/')[-1]
     else:
         if api:
-            if len(
-                    re.findall(
-                        r'/index\.php5\?',
-                        result)) > len(
-                re.findall(
-                    r'/index\.php\?',
-                    result)):
+            if len(re.findall(r'/index\.php5\?', result)) > len(re.findall(r'/index\.php\?', result)):
                 index = '/'.join(api.split('/')[:-1]) + '/index.php5'
             else:
                 index = '/'.join(api.split('/')[:-1]) + '/index.php'
