@@ -746,8 +746,9 @@ def generateXMLDump(config={}, titles=[], start=None, session=None):
         print('Retrieving the XML for every page from "%s"' % (start and start or 'start'))
         if start:
             print("Removing the last chunk of past XML dump: it is probably incomplete.")
-            for i in reverse_readline('%s/%s' % (config['path'], xmlfilename), truncate=True):
-                pass
+            fh = open('%s/%s' % (config['path'], xmlfilename), "r+b")
+            cleanup_dump(fh)
+            fh.close()
         else:
             # requested complete xml dump
             lock = False
@@ -1127,48 +1128,46 @@ def readTitles(config={}, start=None, batch=False):
                     titlelist = []
 
 
-def reverse_readline(filename, buf_size=8192, truncate=False):
-    """a generator that returns the lines of a file in reverse order"""
-    # Original code by srohde, abdus_salam: cc by-sa 3.0
-    # http://stackoverflow.com/a/23646049/718903
-    with open(filename, 'r+') as fh:
-        segment = None
-        offset = 0
-        fh.seek(0, os.SEEK_END)
-        total_size = remaining_size = fh.tell()
-        while remaining_size > 0:
-            offset = min(total_size, offset + buf_size)
-            fh.seek(-offset, os.SEEK_END)
-            buffer = fh.read(min(remaining_size, buf_size))
-            remaining_size -= buf_size
-            lines = buffer.split('\n')
-            # the first line of the buffer is probably not a complete line so
-            # we'll save it and append it to the last line of the next buffer
-            # we read
-            if segment is not None:
-                # if the previous chunk starts right from the beginning of line
-                # do not concat the segment to the last line of new chunk
-                # instead, yield the segment first 
-                if buffer[-1] is not '\n':
-                    lines[-1] += segment
-                else:
-                    if truncate and '</page>' in segment:
-                        pages = buffer.split('</page>')
-                        fh.seek(-offset + buf_size - len(pages[-1]), os.SEEK_END)
-                        fh.truncate
-                        raise StopIteration
-                    else:
-                        yield segment
-            segment = lines[0]
-            for index in range(len(lines) - 1, 0, -1):
-                if truncate and '</page>' in segment:
-                    pages = buffer.split('</page>')
-                    fh.seek(-offset - len(pages[-1]), os.SEEK_END)
-                    fh.truncate
-                    raise StopIteration
-                else:
-                    yield lines[index]
-        yield segment
+def reverse_block_generator(file_obj, size=64 * 1024, reset_offset=True):
+    offset = file_obj.seek(0, os.SEEK_END) if reset_offset else file_obj.tell()
+    while offset > 0:
+        block_size = min(offset, size)
+        offset -= block_size
+        file_obj.seek(offset)
+        block = file_obj.read(block_size)
+        yield block
+
+
+def cleanup_dump(file_obj):
+    file_size = file_obj.seek(0, os.SEEK_END)
+    bs = 64*1024
+    count = 0
+    delim = "</page>\n".encode("utf-8")
+    block_generator_kws = dict(size=bs, reset_offset=True)
+    for block in reverse_block_generator(file_obj, **block_generator_kws):
+        count += 1
+        found = block.rfind(delim)
+        if found != -1:
+            file_obj.truncate(file_size - (count * bs - found - len(delim)))
+            break
+
+
+def reverse_readline(file_obj, skip_empty=True, append_newline=False, block_size=64 * 1024, reset_offset=True):
+    newline = b'\n'
+    empty = b''
+    remainder = empty
+    block_generator_kws = dict(size=block_size, reset_offset=reset_offset)
+    for block in reverse_block_generator(file_obj, **block_generator_kws):
+        lines = block.split(newline)
+        if remainder:
+            lines[-1] = lines[-1] + remainder
+        remainder = lines[0]
+        mask = slice(-1, 0, -1)
+        for line in lines[mask]:
+            if line or not skip_empty:
+                yield line + (newline if append_newline else empty)
+    if remainder or not skip_empty:
+        yield remainder + (newline if append_newline else empty)
 
 
 def saveImageNames(config={}, images=[], session=None):
@@ -1566,9 +1565,10 @@ def loadConfig(config={}, configfilename=''):
     """ Load config file """
 
     try:
-        with open('%s/%s' % (config['path'], configfilename), 'r') as infile:
+        with open('%s/%s' % (config['path'], configfilename), 'rb') as infile:
             config = pickle.load(infile)
-    except:
+    except Exception as e:
+        print(e)
         print('There is no config file. we can\'t resume. Start a new dump.')
         sys.exit()
 
@@ -2125,18 +2125,17 @@ def resumePreviousDump(config={}, other={}):
     images = []
     print('Resuming previous dump process...')
     if config['xml']:
-        titles = readTitles(config)
         try:
-            lasttitles = reverse_readline('%s/%s-%s-titles.txt' %
-                                          (config['path'],
-                                           domain2prefix(config=config, session=other['session']),
-                                           config['date'])
-                                          )
-            lasttitle = next(lasttitles)
-            if lasttitle == '':
-                lasttitle = next(lasttitles)
+            fh = open('%s/%s-%s-titles.txt' % (config['path'], domain2prefix(config=config, session=other['session']), config['date']), "rb")
         except:
-            lasttitle = ''  # probably file does not exists
+            raise
+        try:
+            lasttitles = reverse_readline(file_obj=fh, skip_empty=True)
+            lasttitle = next(lasttitles).decode("utf-8")
+        except:
+            raise
+        finally:
+            fh.close()
         if lasttitle == '--END--':
             # titles list is complete
             print('Title list was completed in the previous session')
@@ -2149,28 +2148,21 @@ def resumePreviousDump(config={}, other={}):
         # checking xml dump
         xmliscomplete = False
         lastxmltitle = None
-        try:
-            f = reverse_readline(
-                '%s/%s-%s-%s.xml' %
-                (config['path'],
-                 domain2prefix(
-                     config=config,
-                     session=other['session']),
-                 config['date'],
-                 config['curonly'] and 'current' or 'history'),
-            )
-            for l in f:
-                if l == '</mediawiki>':
-                    # xml dump is complete
-                    xmliscomplete = True
-                    break
+        fh = open('%s/%s-%s-%s.xml' % (
+            config['path'], domain2prefix(config=config, session=other['session']), config['date'],
+            config['curonly'] and 'current' or 'history'), "rb")
+        lines = reverse_readline(fh, skip_empty=True)
+        for line in lines:
+            line = line.decode("utf-8")
+            if line == '</mediawiki>':
+                # xml dump is complete
+                xmliscomplete = True
+                break
 
-                xmltitle = re.search(r'<title>([^<]+)</title>', l)
-                if xmltitle:
-                    lastxmltitle = undoHTMLEntities(text=xmltitle.group(1))
-                    break
-        except:
-            pass  # probably file does not exists
+            xmltitle = re.search(r'<title>([^<]+)</title>', line)
+            if xmltitle:
+                lastxmltitle = undoHTMLEntities(text=xmltitle.group(1))
+                break
 
         if xmliscomplete:
             print('XML dump was completed in the previous session')
