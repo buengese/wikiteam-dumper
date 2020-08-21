@@ -717,7 +717,7 @@ def cleanXML(xml=''):
     return xml
 
 
-def generateXMLDump(config={}, titles=[], start=None, session=None):
+def generateXMLDump(config={}, start=None, session=None):
     """ Generates a XML dump for a list of titles or from revision IDs """
     # TODO: titles is now unused.
 
@@ -1160,7 +1160,7 @@ def cleanup_dump(file_obj):
             break
 
 
-def reverse_readline(file_obj, skip_empty=True, append_newline=False, block_size=64 * 1024, reset_offset=True):
+def reverse_readlines(file_obj, skip_empty=True, append_newline=False, block_size=64 * 1024, reset_offset=True):
     newline = b'\n'
     empty = b''
     remainder = empty
@@ -2044,8 +2044,7 @@ def createNewDump(config={}, other={}):
     print('Trying generating a new dump into a new directory...')
     if config['xml']:
         getPageTitles(config=config, session=other['session'])
-        titles = readTitles(config)
-        generateXMLDump(config=config, titles=titles, session=other['session'])
+        generateXMLDump(config=config, session=other['session'])
     if config['images']:
         images += getImageNames(config=config, session=other['session'])
         saveImageNames(config=config, images=images, session=other['session'])
@@ -2059,115 +2058,109 @@ def createNewDump(config={}, other={}):
 
 
 def resumePreviousDump(config={}, other={}):
-    images = []
     print('Resuming previous dump process...')
     if config['xml']:
-        try:
-            fh = open('%s/%s-%s-titles.txt' % (
-            config['path'], domain2prefix(config=config, session=other['session']), config['date']), "rb")
-        except:
-            raise
-        try:
-            lasttitles = reverse_readline(file_obj=fh, skip_empty=True)
-            lasttitle = next(lasttitles).decode("utf-8")
-        except:
-            raise
-        finally:
-            fh.close()
-        if lasttitle == '--END--':
-            # titles list is complete
-            print('Title list was completed in the previous session')
-        else:
-            print('Title list is incomplete. Reloading...')
-            # do not resume, reload, to avoid inconsistences, deleted pages or
-            # so
-            getPageTitles(config=config, session=other['session'])
+        resumeXMLDump(config=config, other=other)
+    if config['images']:
+        resumeImageDump(config=config, other=other)
 
-        # checking xml dump
-        xmliscomplete = False
-        lastxmltitle = None
+
+def resumeXMLDump(config={}, other={}):
+    lasttitle = ''
+    try:
+        fh = open('%s/%s-%s-titles.txt' % (
+            config['path'], domain2prefix(config=config, session=other['session']), config['date']), "rb")
+        lasttitles = reverse_readlines(file_obj=fh, skip_empty=True)
+        lasttitle = next(lasttitles).decode("utf-8")
+        fh.close()
+    except FileNotFoundError:
+        pass
+    if lasttitle == '--END--':
+        # titles list is complete
+        print('Title list was completed in the previous session')
+    else:
+        print('Title list is incomplete. Reloading...')
+        getPageTitles(config=config, session=other['session'])
+
+    try:
         fh = open('%s/%s-%s-%s.xml' % (
             config['path'], domain2prefix(config=config, session=other['session']), config['date'],
             config['curonly'] and 'current' or 'history'), "rb")
-        lines = reverse_readline(fh, skip_empty=True)
-        for line in lines:
-            line = line.decode("utf-8")
-            if line == '</mediawiki>':
-                # xml dump is complete
-                xmliscomplete = True
-                break
+    except FileNotFoundError:
+        print('No XML dump found. Restarting...')
+        generateXMLDump(config=config, session=other['session'])
+        return
 
-            xmltitle = re.search(r'<title>([^<]+)</title>', line)
-            if xmltitle:
-                lastxmltitle = undoHTMLEntities(text=xmltitle.group(1))
-                break
-
-        if xmliscomplete:
+    lines = reverse_readlines(fh, skip_empty=True)
+    lastxmltitle = None
+    for line in lines:
+        line = line.decode("utf-8")
+        if line == '</mediawiki>':
+            # xml dump is complete
             print('XML dump was completed in the previous session')
-        elif lastxmltitle:
-            # resuming...
-            print('Resuming XML dump from "%s"' % lastxmltitle)
-            titles = readTitles(config, start=lastxmltitle)
-            generateXMLDump(
-                config=config,
-                titles=titles,
-                start=lastxmltitle,
-                session=other['session'])
-        else:
-            # corrupt? only has XML header?
-            print('XML is corrupt? Regenerating...')
-            titles = readTitles(config)
-            generateXMLDump(
-                config=config, titles=titles, session=other['session'])
+            return
 
-    if config['images']:
-        # load images
-        lastimage = ''
-        try:
-            file = open('%s/%s-%s-images.txt' % (config['path'], domain2prefix(config=config), config['date']), 'r')
-            for line in file:
-                if re.search(r'\t', line):
-                    images.append(line.split('\t'))
-                lastimage = line
-            file.close()
-        except FileNotFoundError:
-            pass  # it's fine if the file doesn't exist yet
-        if lastimage == '--END--':
-            print('Image list was completed in the previous session')
-        else:
-            print('Image list is incomplete. Reloading...')
-            # do not resume, reload, to avoid inconsistences, deleted images or
-            # so
-            images = getImageNames(config=config, session=other['session'])
-            saveImageNames(config=config, images=images)
-        # checking images directory
-        listdir = []
-        try:
-            listdir = [n for n in os.listdir('%s/images' % (config['path']))]
-        except:
-            pass  # probably directory does not exist
-        listdir.sort()
-        complete = True
-        c = 0
-        for filename, url, uploader in images:
-            if sanitizeFilename(other=other, filename=filename) not in listdir:
-                print("Not found %s" % filename)
-                complete = False
-                break
-            c += 1
-        print('%d images were found in the directory from a previous session' % c)
-        if complete:
-            # image dump is complete
-            print('Image dump was completed in the previous session')
-        else:
-            # we resume from previous image, which may be corrupted (or missing
-            # .desc)  by the previous session ctrl-c or abort
-            generateImageDump(
-                config=config,
-                other=other,
-                images=images,
-                start=images[c - 1][0],
-                session=other['session'])
+        xmltitle = re.search(r'<title>([^<]+)</title>', line)
+        if xmltitle:
+            lastxmltitle = undoHTMLEntities(text=xmltitle.group(1))
+            break
+
+    if lastxmltitle:
+        # resuming...
+        print('Resuming XML dump from "%s"' % lastxmltitle)
+        generateXMLDump(config=config, start=lastxmltitle, session=other['session'])
+    else:
+        # corrupt? only has XML header?
+        print('XML is corrupt? Regenerating...')
+        generateXMLDump(config=config, session=other['session'])
+
+
+def resumeImageDump(config={}, other={}):
+    # load images
+    lastimage = ''
+    images = []
+    try:
+        file = open('%s/%s-%s-images.txt' % (config['path'], domain2prefix(config=config), config['date']), 'r')
+        for line in file:
+            if re.search(r'\t', line):
+                images.append(line.split('\t'))
+            lastimage = line
+        file.close()
+    except FileNotFoundError:
+        pass  # it's fine if the file doesn't exist yet
+    if lastimage == '--END--':
+        print('Image list was completed in the previous session')
+    else:
+        print('Image list is incomplete. Reloading...')
+        # do not resume, reload, to avoid inconsistences, deleted images or
+        images = getImageNames(config=config, session=other['session'])
+        saveImageNames(config=config, images=images)
+
+    # checking images directory
+    listdir = []
+    try:
+        listdir = [n for n in os.listdir('%s/images' % (config['path']))]
+    except FileNotFoundError:
+        pass  # probably directory does not exist
+    listdir.sort()
+
+    c = 0
+    complete = True
+    for filename, _, _ in images:
+        if sanitizeFilename(other=other, filename=filename) not in listdir:
+            complete = False
+            break
+        c += 1
+    print('%d images were found in the directory from a previous session' % c)
+    if complete:
+        # image dump is complete
+        print('Image dump was completed in the previous session')
+    else:
+        # we resume from previous image, which may be corrupted (or missing
+        # .desc)  by the previous session ctrl-c or abort
+        generateImageDump(config=config, other=other, images=images,
+                          start=images[c - 1][0] if c != 0 else '',
+                          session=other['session'])
 
 
 def saveSpecialVersion(config={}, session=None):
