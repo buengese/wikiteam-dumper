@@ -2152,7 +2152,7 @@ def resumePreviousDump(config={}, other={}):
             print('XML dump was completed in the previous session')
         elif lastxmltitle:
             # resuming...
-            print('Resuming XML dump from "%s"' % (lastxmltitle))
+            print('Resuming XML dump from "%s"' % lastxmltitle)
             titles = readTitles(config, start=lastxmltitle)
             generateXMLDump(
                 config=config,
@@ -2170,22 +2170,14 @@ def resumePreviousDump(config={}, other={}):
         # load images
         lastimage = ''
         try:
-            f = open(
-                '%s/%s-%s-images.txt' %
-                (config['path'],
-                 domain2prefix(
-                     config=config),
-                 config['date']),
-                'r')
-            raw = str(f.read(), 'utf-8').strip()
-            lines = raw.split('\n')
-            for l in lines:
-                if re.search(r'\t', l):
-                    images.append(l.split('\t'))
-            lastimage = lines[-1]
-            f.close()
-        except:
-            pass  # probably file does not exists
+            file = open('%s/%s-%s-images.txt' % (config['path'], domain2prefix(config=config), config['date']), 'r')
+            for line in file:
+                if re.search(r'\t', line):
+                    images.append(line.split('\t'))
+                lastimage = line
+            file.close()
+        except FileNotFoundError:
+            pass  # it's fine if the file doesn't exist yet
         if lastimage == '--END--':
             print('Image list was completed in the previous session')
         else:
@@ -2197,26 +2189,19 @@ def resumePreviousDump(config={}, other={}):
         # checking images directory
         listdir = []
         try:
-            listdir = [n.decode('utf-8') for n in os.listdir('%s/images' % (config['path']))]
+            listdir = [n for n in os.listdir('%s/images' % (config['path']))]
         except:
             pass  # probably directory does not exist
         listdir.sort()
         complete = True
-        lastfilename = ''
-        lastfilename2 = ''
         c = 0
         for filename, url, uploader in images:
-            lastfilename2 = lastfilename
-            # return always the complete filename, not the truncated
-            lastfilename = filename
-            filename2 = filename
-            if len(filename2) > other['filenamelimit']:
-                filename2 = truncateFilename(other=other, filename=filename2)
-            if filename2 not in listdir:
+            if sanitizeFilename(other=other, filename=filename) not in listdir:
+                print("Not found %s" % filename)
                 complete = False
                 break
             c += 1
-        print('%d images were found in the directory from a previous session' % (c))
+        print('%d images were found in the directory from a previous session' % c)
         if complete:
             # image dump is complete
             print('Image dump was completed in the previous session')
@@ -2227,12 +2212,8 @@ def resumePreviousDump(config={}, other={}):
                 config=config,
                 other=other,
                 images=images,
-                start=lastfilename2,
+                start=images[c-1][0],
                 session=other['session'])
-
-    if config['logs']:
-        # fix
-        pass
 
 
 def saveSpecialVersion(config={}, session=None):
