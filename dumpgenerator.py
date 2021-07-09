@@ -87,11 +87,16 @@ def sanitizeFilename(other={}, filename=''):
     """ Strip forward slashes and truncate overlong filenames. """
     """ Also insert a hash when the filename was modified to try to """
     """ avoid name collisions. """
-    if '/' in filename or len(filename) > other['filenamelimit']:
+    print("sanitizeFilename in: %s" % filename)
+    if '/' in filename:
         filename = filename.replace('/', '%2F')
+    if len(filename) > other['filenamelimit']:
         checksum = md5(filename.encode('utf-8')).hexdigest()
         extension = '.' + filename.split('.')[-1]
+        if len(extension) > 5:
+            extension = "" # file likely didn't have an extension
         filename = filename[:other['filenamelimit']] + checksum + extension
+    print("sanitizeFilename out: %s" % filename)
     return filename
 
 
@@ -432,7 +437,7 @@ def getXMLHeader(config={}, session=None):
         try:
             print('Getting the XML header from the API')
             # Export and 'exportnowrap' exist from MediaWiki 1.15, allpages from 1.18
-            r = requests.get(config['api'] + '?action=query&export=1&exportnowrap=1&list=allpages&aplimit=1', imeout=10)
+            r = requests.get(config['api'] + '?action=query&export=1&exportnowrap=1&list=allpages&aplimit=1', timeout=10)
             xml = r.text
             # Otherwise try without exportnowrap, e.g. Wikia returns a blank page on 1.19
             if not re.match(r"\s*<mediawiki", xml):
@@ -841,7 +846,13 @@ def getXMLRevisions(config={}, session=None, start=None):
                         continue
 
                     for page in arvrequest['query']['allrevisions']:
-                        yield makeXmlFromPage(page)
+                        try:
+                            yield makeXmlFromPage(page)
+                        except PageMissingError as e:
+                            logerror(
+                                config=config,
+                                text=str(e)
+                            )
                     if 'continue' in arvrequest:
                         arvparams['arvcontinue'] = arvrequest['continue']['arvcontinue']
                     else:
@@ -1095,7 +1106,6 @@ def makeXmlFromPage(page):
                 revision.append(E.sha1(rev['sha1']))
             p.append(revision)
     except KeyError as e:
-        print(e)
         raise PageMissingError(page['title'], e)
     return etree.tostring(p, pretty_print=True, encoding='unicode')
 
